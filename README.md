@@ -31,9 +31,4 @@ Istina is a CLI-first prototype that ingests news articles, analyzes them for bi
 
 ## 📦 Installation
 
-```bash
-git clone https://github.com/YOUR_USERNAME/istina.git
-cd istina
-python -m venv venv
-source venv/bin/activate  # or venv\Scripts\activate on Windows
-pip install -r requirements.txt
+- *Coming soon ;)*
