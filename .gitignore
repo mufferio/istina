@@ -19,3 +19,7 @@ __pycache__/
 
 # macOS junk
 .DS_Store
+
+#scripts
+
+*.sh
