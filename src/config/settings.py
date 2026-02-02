@@ -40,3 +40,48 @@ class Settings:
     log_level: str = "INFO"
     data_dir: str = "./data"
     rate_limit_rpm: int = 60
+
+# src/config/settings.py
+
+from dataclasses import dataclass
+from dotenv import load_dotenv
+import os
+
+
+@dataclass
+class Settings:
+    """
+    Central configuration object for the Istina app.
+    """
+
+    env: str = "dev"
+    provider: str = "mock"
+    repo_type: str = "memory"
+    log_level: str = "INFO"
+    data_dir: str = "./data"
+    rate_limit_rpm: int = 60
+
+
+def load_settings() -> Settings:
+    """
+    Load settings from:
+    1. defaults (dataclass)
+    2. .env file
+    3. system environment variables
+
+    Order of precedence:
+    env vars > .env > defaults
+    """
+
+    # 🔑 this loads .env automatically
+    load_dotenv()
+
+    return Settings(
+        env=os.getenv("ISTINA_ENV", "dev"),
+        provider=os.getenv("ISTINA_PROVIDER", "mock"),
+        repo_type=os.getenv("ISTINA_REPO_TYPE", "memory"),
+        log_level=os.getenv("ISTINA_LOG_LEVEL", "INFO"),
+        data_dir=os.getenv("ISTINA_DATA_DIR", "./data"),
+        rate_limit_rpm=int(os.getenv("ISTINA_RATE_LIMIT_RPM", "60")),
+    )
+
