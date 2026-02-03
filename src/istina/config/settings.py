@@ -24,9 +24,9 @@ from dotenv import load_dotenv
 import os
 
 
-ALLOWED_ENVS = {}
-ALLOWED_PROVIDERS = {}
-
+ALLOWED_ENVS = {} # add allowed env's
+ALLOWED_PROVIDERS = {} # add allowed AI providers
+# double check what ai you have decided to go with
 
 
 @dataclass
@@ -41,6 +41,9 @@ class Settings:
     log_level: str = "INFO"
     data_dir: str = "./data"
     rate_limit_rpm: int = 60
+
+    # def validate() -> None:
+    ## populate this with "raise" error checks for each catagory, ensuring each attribute is checked
 
 
 def load_settings() -> Settings:
