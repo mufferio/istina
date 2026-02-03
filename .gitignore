@@ -1,25 +1,7 @@
-# Environment files (secrets)
-.env*
-
-# Local persistence/data
-data/
-
-# Python cache
-__pycache__/
-*.py[cod]
-
-# Virtual environment
 .venv/
-
-# Test cache
-.pytest_cache/
-
-# Logs
-*.log
-
-# macOS junk
+__pycache__/
+*.egg-info/
+build/
+dist/
+.env
 .DS_Store
-
-#scripts
-.istina_issue_bodies/
-*.sh
