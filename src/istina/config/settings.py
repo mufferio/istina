@@ -75,6 +75,7 @@ def validate_settings(settings: Settings):
     valid_envs = {"dev", "test", "prod"}
     valid_providers = {"mock", "openai", "azure", "gemini"}
     valid_repo_types = {"memory", "file"}
+    valid_log_levels = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
 
     if settings.env not in valid_envs:
         raise ConfigError(f"Invalid env: {settings.env}. Must be one of {valid_envs}")
@@ -84,3 +85,9 @@ def validate_settings(settings: Settings):
     
     if settings.repo_type not in valid_repo_types:
         raise ConfigError(f"Invalid repo_type: {settings.repo_type}. Must be one of {valid_repo_types}")
+
+    if settings.log_level.upper() not in valid_log_levels:
+        raise ConfigError(f"Invalid log_level: {settings.log_level}. Must be one of {valid_log_levels}")
+
+    if not isinstance(settings.rate_limit_rpm, int) or settings.rate_limit_rpm <= 0:
+        raise ConfigError(f"Invalid rate_limit_rpm: {settings.rate_limit_rpm}. Must be a positive integer.")
