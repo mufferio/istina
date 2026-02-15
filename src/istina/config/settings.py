@@ -24,9 +24,9 @@ from dotenv import load_dotenv
 import os
 
 
-ALLOWED_ENVS = {} # add allowed env's
-ALLOWED_PROVIDERS = {} # add allowed AI providers
-# double check what ai you have decided to go with
+class ConfigError(ValueError):
+    """Raised when Istina configuration is invalid."""
+    pass
 
 
 @dataclass
@@ -41,9 +41,6 @@ class Settings:
     log_level: str = "INFO"
     data_dir: str = "./data"
     rate_limit_rpm: int = 60
-
-    # def validate() -> None:
-    ## populate this with "raise" error checks for each catagory, ensuring each attribute is checked
 
 
 def load_settings() -> Settings:
@@ -69,3 +66,21 @@ def load_settings() -> Settings:
         rate_limit_rpm=int(os.getenv("ISTINA_RATE_LIMIT_RPM", "60")),
     )
 
+def validate_settings(settings: Settings):
+    """
+    Validate settings values to ensure they are within expected parameters.
+    This can help catch misconfigurations early.
+    """
+
+    valid_envs = {"dev", "test", "prod"}
+    valid_providers = {"mock", "openai", "azure", "gemini"}
+    valid_repo_types = {"memory", "file"}
+
+    if settings.env not in valid_envs:
+        raise ConfigError(f"Invalid env: {settings.env}. Must be one of {valid_envs}")
+
+    if settings.provider not in valid_providers:
+        raise ConfigError(f"Invalid provider: {settings.provider}. Must be one of {valid_providers}")
+    
+    if settings.repo_type not in valid_repo_types:
+        raise ConfigError(f"Invalid repo_type: {settings.repo_type}. Must be one of {valid_repo_types}")
