@@ -20,32 +20,13 @@ Notes:
 - In tests, construct Settings directly rather than relying on .env.
 """
 from dataclasses import dataclass
-
-@dataclass
-class Settings:
-    """
-    Central configuration object for the entire Istina app.
-
-    This should be the single source of truth for:
-    - environment
-    - provider selection
-    - repository type
-    - logging level
-    - data paths
-    """
-
-    env: str = "dev"
-    provider: str = "mock"
-    repo_type: str = "memory"
-    log_level: str = "INFO"
-    data_dir: str = "./data"
-    rate_limit_rpm: int = 60
-
-# src/config/settings.py
-
-from dataclasses import dataclass
 from dotenv import load_dotenv
 import os
+
+
+class ConfigError(ValueError):
+    """Raised when Istina configuration is invalid."""
+    pass
 
 
 @dataclass
@@ -85,3 +66,21 @@ def load_settings() -> Settings:
         rate_limit_rpm=int(os.getenv("ISTINA_RATE_LIMIT_RPM", "60")),
     )
 
+def validate_settings(settings: Settings):
+    """
+    Validate settings values to ensure they are within expected parameters.
+    This can help catch misconfigurations early.
+    """
+
+    valid_envs = {"dev", "test", "prod"}
+    valid_providers = {"mock", "openai", "azure", "gemini"}
+    valid_repo_types = {"memory", "file"}
+
+    if settings.env not in valid_envs:
+        raise ConfigError(f"Invalid env: {settings.env}. Must be one of {valid_envs}")
+
+    if settings.provider not in valid_providers:
+        raise ConfigError(f"Invalid provider: {settings.provider}. Must be one of {valid_providers}")
+    
+    if settings.repo_type not in valid_repo_types:
+        raise ConfigError(f"Invalid repo_type: {settings.repo_type}. Must be one of {valid_repo_types}")
