@@ -23,3 +23,103 @@ Used by:
 - repositories to store/load Articles
 - visitors to run analysis operations over Articles
 """
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any, Dict, Optional, Mapping
+import hashlib
+
+
+def _norm(s: Optional[str]) -> str:
+    """Normalize strings for stable hashing."""
+    if s is None:
+        return ""
+    return " ".join(s.strip().split()).lower()
+
+
+def _norm_url(url: str) -> str:
+    """Normalize URLs for dedupe hashing (basic normalization)."""
+    u = url.strip()
+    if u.endswith("/"):
+        u = u[:-1]
+    return u
+
+@dataclass(frozen=True)
+class Article:
+    """
+    Core news Article entity.
+
+    - Immutable (frozen dataclass)
+    - Stable id computed from source, url, published_at
+    - Used across ingestion, storage, analysis, and reporting
+    """
+    id: str
+    title: str
+    url: str
+    source: str
+    published_at: Optional[str] = None  # ISO 8601 string, e.g. "2026-02-17T12:30:00Z"
+    summary: Optional[str] = None
+
+    @staticmethod
+    def compute_id(*, url: str, source: str, published_at: Optional[str]) -> str:
+        key = f"{_norm(source)}|{_norm_url(url)}|{_norm(published_at)}"
+        return hashlib.sha256(key.encode("utf-8")).hexdigest()
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        title: str,
+        url: str,
+        source: str,
+        published_at: Optional[str] = None,
+        summary: Optional[str] = None,
+    ) -> "Article":
+        if not url or not url.strip():
+            raise ValueError("Article.url is required")
+        if not source or not source.strip():
+            raise ValueError("Article.source is required")
+        if not title or not title.strip():
+            raise ValueError("Article.title is required")
+
+        aid = cls.compute_id(url=url, source=source, published_at=published_at)
+        return cls(
+            id=aid,
+            title=title.strip(),
+            url=_norm_url(url),
+            source=source.strip(),
+            published_at=published_at.strip() if isinstance(published_at, str) else None,
+            summary=summary.strip() if isinstance(summary, str) else None,
+        )
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "title": self.title,
+            "url": self.url,
+            "source": self.source,
+            "published_at": self.published_at,
+            "summary": self.summary,
+        }
+
+    @classmethod
+    def from_dict(cls, d: Mapping[str, Any]) -> "Article":
+        a = cls.create(
+            title=d["title"],
+            url=d["url"],
+            source=d["source"],
+            published_at=d.get("published_at"),
+            summary=d.get("summary"),
+        )
+
+        stored_id = d.get("id")
+        if stored_id is not None and stored_id != a.id:
+            raise ValueError(
+                f"Article id mismatch: stored={stored_id!r} computed={a.id!r}"
+            )
+
+        return a
+
+
+
