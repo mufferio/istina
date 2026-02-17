@@ -105,21 +105,27 @@ class Article:
 
     @classmethod
     def from_dict(cls, d: Mapping[str, Any]) -> "Article":
+        try:
+            title = d["title"]
+            url = d["url"]
+            source = d["source"]
+        except KeyError as e:
+            raise ValueError(f"Missing required field: {e.args[0]}") from None
+
         a = cls.create(
-            title=d["title"],
-            url=d["url"],
-            source=d["source"],
+            title=title,
+            url=url,
+            source=source,
             published_at=d.get("published_at"),
             summary=d.get("summary"),
         )
 
         stored_id = d.get("id")
         if stored_id is not None and stored_id != a.id:
-            raise ValueError(
-                f"Article id mismatch: stored={stored_id!r} computed={a.id!r}"
-            )
+            raise ValueError(f"Article id mismatch: stored={stored_id!r} computed={a.id!r}")
 
         return a
+
 
 
 
