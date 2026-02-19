@@ -76,6 +76,12 @@ class Article:
         published_at: Optional[str] = None,
         summary: Optional[str] = None,
     ) -> "Article":
+        if not isinstance(url, str):
+            raise ValueError("Article.url must be a string")
+        if not isinstance(source, str):
+            raise ValueError("Article.source must be a string")
+        if not isinstance(title, str):
+            raise ValueError("Article.title must be a string")
         if not url or not url.strip():
             raise ValueError("Article.url is required")
         if not source or not source.strip():
