@@ -41,7 +41,7 @@ class BaseRepository(ABC):
     """
 
     @abstractmethod
-    def add_article(self, article: Article) -> None:
+    def add_articles(self, article: Article) -> Tuple[int, int]:
         """Add a new Article to the repository."""
         pass
 
