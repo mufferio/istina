@@ -22,7 +22,8 @@ from istina.model.entities.article import Article
 from istina.model.entities.bias_score import BiasScore
 from istina.model.repositories.base_repository import BaseRepository
 
-
+#issue-3.5: all 48 tests passed at this point 
+#Date/Time: 2026-02-20, 3:15 PM
 
 @dataclass
 class MemoryRepository(BaseRepository):
