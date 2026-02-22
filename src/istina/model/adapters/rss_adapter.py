@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Sequence
 
 import feedparser
 import requests
@@ -167,5 +167,38 @@ def parse_entries(parsed: Any, source: Optional[str] = None) -> List[Article]:
             continue
 
     return articles
+
+
+def fetch_articles(urls: Sequence[str]) -> List[Article]:
+    """
+    Fetch articles from multiple RSS feed URLs and return a combined list.
+
+    Requirements (Issue 4.4):
+    - For each URL: fetch_feed -> parse_xml -> parse_entries
+    - One failing feed must not abort the rest (log the error, continue)
+    - Aggregate articles across all successfully processed feeds
+
+    Args:
+        urls: sequence of RSS feed URLs to ingest.
+
+    Returns:
+        Combined List[Article] from all feeds that succeeded.
+        May be empty if every feed fails.
+    """
+    results: List[Article] = []
+
+    for url in urls:
+        try:
+            xml = fetch_feed(url)
+            parsed = parse_xml(xml)
+            # Pass the URL as the source fallback so articles from a feed with no
+            # title/link metadata are still identifiable by their origin URL.
+            articles = parse_entries(parsed, source=url)
+            results.extend(articles)
+        except Exception as e:
+            logger.error("RSS feed failed url=%s error=%s", url, e, exc_info=False)
+            continue
+
+    return results
 
 
