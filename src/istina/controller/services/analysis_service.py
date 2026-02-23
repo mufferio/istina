@@ -14,11 +14,12 @@ Reliability:
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Protocol
 
 from istina.model.entities.article import Article
+from istina.model.entities.bias_score import BiasScore
 from istina.model.repositories.base_repository import BaseRepository
 
 
@@ -27,6 +28,24 @@ class SelectionParams:
     limit: Optional[int] = None  # Max number of articles to analyze
     source: Optional[str] = None  # Filter by article source
     since: Optional[datetime] = None  # Filter articles published since this date
+
+
+class BiasProvider(Protocol):
+    """
+    Provider interface (mockable) for analyzing an article.
+    Later you can swap this with a Visitor pattern if desired.
+    """
+    def analyze_article(self, article: Article) -> BiasScore:
+        """Given an Article, return a BiasScore."""
+        ...
+
+
+@dataclass
+class AnalyzeResult:
+    analyzed_count: int
+    skipped_count: int
+    failed_count: int
+    errors: List[str] = field(default_factory=list)
 
 
 class AnalysisService:
@@ -75,3 +94,59 @@ class AnalysisService:
                 unscored.append(a)
 
         return unscored
+    
+
+    def analyze(
+        self,
+        provider: BiasProvider,
+        params: Optional[SelectionParams] = None,
+    ) -> AnalyzeResult:
+        """
+        Analyze selected (unscored) articles and persist BiasScores.
+
+        Requirements (Issue 5.4):
+        - loops selected articles
+        - calls provider.analyze_article(article)
+        - repo.upsert_bias_score(score)
+        - collects stats (analyzed/skipped/failed)
+        - handles provider errors gracefully (record failure, continue)
+
+        Notes:
+        - "skipped" here means: article was selected but ended up not analyzable
+          (e.g., missing id) or provider returned invalid score.
+        """
+        selected = self.select_unscored(params)
+
+        analyzed = 0
+        skipped = 0
+        failed = 0
+        errors: List[str] = []
+
+        for article in selected:
+            article_id = article.id
+            if not article_id:
+                skipped += 1
+                errors.append("Skipped article with missing id")
+                continue
+
+            try:
+                score = provider.analyze_article(article)
+
+                if getattr(score, "article_id", None) != article_id:
+                    skipped += 1
+                    errors.append(f"Provider returned score with mismatched article_id for article {article_id}")
+                    continue
+
+                self.repo.upsert_bias_score(score)
+                analyzed += 1
+
+            except Exception as e:
+                failed += 1
+                errors.append(f"Failed to analyze article {article_id}: {str(e)}")
+
+        return AnalyzeResult(
+            analyzed_count=analyzed,
+            skipped_count=skipped,
+            failed_count=failed,
+            errors=errors,
+        )   
