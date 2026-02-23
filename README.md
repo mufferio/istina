@@ -29,6 +29,27 @@ Istina is a CLI-first prototype that ingests news articles, analyzes them for bi
 - **Visitor Pattern:** Traverse articles/conflicts to apply scoring/export logic
 - **Repository Pattern:** Pluggable persistence (in-memory or file/DB)
 
+## 🔌 RSS Feeds (Issue 4 — smoke-tested 2026-02-22)
+
+The following real-world feeds are used as reference fixtures for integration
+smoke tests (`scripts/smoke_test_rss.py`):
+
+| Outlet | RSS URL |
+|---|---|
+| BBC News | `http://feeds.bbci.co.uk/news/rss.xml` |
+| Al Jazeera | `https://www.aljazeera.com/xml/rss/all.xml` |
+
+Both feeds were confirmed to:
+- Return HTTP 200 with non-empty XML
+- Parse to `Article` objects with correct `title`, `url`, and `source` fields
+- Produce valid ISO-8601 UTC `published_at` strings (`YYYY-MM-DDTHH:MM:SSZ`)
+
+Run the smoke test manually at any time:
+
+```bash
+python3 scripts/smoke_test_rss.py
+```
+
 ## 📦 Installation
 
 - *Coming soon ;)*
