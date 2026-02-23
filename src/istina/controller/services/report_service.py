@@ -16,7 +16,7 @@ Testing:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from istina.model.repositories.base_repository import BaseRepository
 from istina.model.entities.article import Article
@@ -84,3 +84,42 @@ class ReportService:
             counts_by_source=counts_by_source if include_by_source else {},
             counts_by_overall_label=counts_by_label if include_by_overall_label else {},
         )
+
+    def get_full_report(
+        self,
+        limit: Optional[int] = None,
+        article_id: Optional[str] = None,
+        source: Optional[str] = None,
+    ) -> List[Tuple[Article, Optional[BiasScore]]]:
+        """
+        Return detailed report data for CLI full-report rendering.
+
+        Each element is a (Article, BiasScore | None) pair.
+        BiasScore is None when the article has not been analyzed yet.
+
+        Args:
+            limit:      max number of pairs to return (applied after all filters).
+            article_id: if given, return exactly one pair for that article
+                        (or an empty list if the article does not exist).
+            source:     if given, restrict to articles whose source matches exactly.
+
+        Ordering:
+            Delegates to repo.list_articles which guarantees published_at DESC,
+            insertion-index ASC on ties — deterministic and consistent with the
+            rest of the application.
+
+        Returns:
+            list[tuple[Article, BiasScore | None]]
+        """
+        if article_id is not None:
+            article = self._repo.get_article(article_id)
+            if article is None:
+                return []
+            score: Optional[BiasScore] = self._repo.get_bias_score(article_id)
+            return [(article, score)]
+
+        articles: List[Article] = self._repo.list_articles(
+            limit=limit,
+            source=source,
+        )
+        return [(a, self._repo.get_bias_score(a.id)) for a in articles]
