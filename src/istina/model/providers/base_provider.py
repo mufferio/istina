@@ -18,8 +18,8 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from istina.model.domain.article import Article
-from istina.model.domain.bias_score import BiasScore
+from istina.model.entities.article import Article
+from istina.model.entities.bias_score import BiasScore
 
 
 
