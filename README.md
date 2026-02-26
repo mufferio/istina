@@ -29,6 +29,21 @@ Istina is a CLI-first prototype that ingests news articles, analyzes them for bi
 - **Visitor Pattern:** Traverse articles/conflicts to apply scoring/export logic
 - **Repository Pattern:** Pluggable persistence (in-memory or file/DB)
 
+## 🧪 Gemini Live Smoke Tests (Optional)
+
+Istina includes gated live integration tests that call the real Google Gemini API
+to verify end-to-end analysis (provider → parsing → repository storage).
+
+These tests are **optional** and skipped automatically unless an API key is set.
+
+👉 **Before running live tests, please check `docs/GEMINI_LIVE_TESTS.md` for full setup instructions.**
+
+Example run:
+
+```bash
+pytest tests/test_providers/test_gemini_live_smoke.py -v
+```
+
 ## 🔌 RSS Feeds (Issue 4 — smoke-tested 2026-02-22)
 
 The following real-world feeds are used as reference fixtures for integration
