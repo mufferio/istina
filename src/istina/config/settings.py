@@ -44,7 +44,7 @@ class Settings:
     
     # Gemini API configuration
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.5-pro"
+    gemini_model: str = "gemini-2.5-flash"
 
 
 def load_settings() -> Settings:
@@ -69,7 +69,7 @@ def load_settings() -> Settings:
         data_dir=os.getenv("ISTINA_DATA_DIR", "./data"),
         rate_limit_rpm=int(os.getenv("ISTINA_RATE_LIMIT_RPM", "60")),
         gemini_api_key=os.getenv("ISTINA_GEMINI_API_KEY", ""),
-        gemini_model=os.getenv("ISTINA_GEMINI_MODEL", "gemini-2.5-pro"),
+        gemini_model=os.getenv("ISTINA_GEMINI_MODEL", "gemini-2.5-flash"),
     )
 
 def validate_settings(settings: Settings):

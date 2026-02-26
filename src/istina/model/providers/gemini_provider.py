@@ -577,7 +577,7 @@ class GeminiProvider(BaseProvider):
     """
 
     api_key: str = field(repr=False)
-    model: str = "gemini-2.5-pro"
+    model: str = "gemini-2.5-flash"
     timeout_seconds: float = 10.0
     limiter: Optional[RateLimiter] = None
 
@@ -587,7 +587,7 @@ class GeminiProvider(BaseProvider):
     @classmethod
     def from_settings(cls, settings: Any, *, limiter: Optional[RateLimiter] = None) -> "GeminiProvider":
         api_key = _get_setting(settings, "gemini_api_key", None)
-        model = _get_setting(settings, "gemini_model", "gemini-2.5-pro")
+        model = _get_setting(settings, "gemini_model", "gemini-2.5-flash")
         if not api_key:
             raise ValueError("gemini_api_key is required to instantiate GeminiProvider")
         return cls(api_key=str(api_key), model=str(model), limiter=limiter)
