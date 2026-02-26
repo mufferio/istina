@@ -65,7 +65,7 @@ def live_settings():
     return {
         "provider": "gemini",
         "gemini_api_key": api_key,
-        "gemini_model": "gemini-1.5-pro",
+        "gemini_model": "gemini-2.5-pro",
         "rate_limit_rpm": 30  # Conservative for live testing
     }
 
