@@ -242,23 +242,36 @@ class TestRateLimiterEdgeCases:
         second_call_time = time.monotonic() - start_time
         assert second_call_time >= 0.9  # Should wait nearly full window
 
-    @patch('time.monotonic')
-    def test_time_handling_edge_cases(self, mock_monotonic):
-        """Test edge cases with time handling."""
+    @patch('time.monotonic')  
+    @patch('time.sleep')
+    def test_time_handling_edge_cases(self, mock_sleep, mock_monotonic):
+        """Test edge cases with time handling and window expiry."""
         # Mock time to control timing precisely
-        mock_monotonic.side_effect = [0, 0.1, 0.2, 60.0, 60.1]
+        # Test scenario: calls within limit, then a big time jump to test window cleanup
+        mock_monotonic.side_effect = [
+            0.0,    # acquire() #1 - start time  
+            0.0,    # acquire() #1 - record time
+            0.1,    # acquire() #2 - start time
+            0.1,    # acquire() #2 - record time  
+            65.0,   # acquire() #3 - start time (after window expiry)
+            65.0    # acquire() #3 - record time
+        ]
         
-        limiter = RateLimiter(rpm=2, window_seconds=60.0)
+        # Don't actually sleep
+        mock_sleep.return_value = None
         
-        # Make calls at mocked times
-        limiter.acquire()  # t=0
-        limiter.acquire()  # t=0.1
+        limiter = RateLimiter(rpm=3, window_seconds=60.0)  # 3 per minute
         
-        # At t=0.2, should be at limit, but then time jumps to t=60.0
-        # This simulates window expiry
-        limiter.acquire()  # t=60.0
+        # Make 2 calls within limit
+        limiter.acquire()  # t=0.0
+        limiter.acquire()  # t=0.1  
+        assert len(limiter._calls) == 2
         
-        # Should have 1 call in window (the one at t=60.0)
+        # Time jumps to t=65.0 (past the 60s window)
+        # This should clean up old calls automatically
+        limiter.acquire()  # t=65.0
+        
+        # Should have cleaned up expired calls, leaving only the recent one
         assert len(limiter._calls) == 1
 
     def test_concurrent_window_cleanup(self):
