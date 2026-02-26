@@ -41,6 +41,10 @@ class Settings:
     log_level: str = "INFO"
     data_dir: str = "./data"
     rate_limit_rpm: int = 60
+    
+    # Gemini API configuration
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-1.5-pro"
 
 
 def load_settings() -> Settings:
@@ -64,6 +68,8 @@ def load_settings() -> Settings:
         log_level=os.getenv("ISTINA_LOG_LEVEL", "INFO"),
         data_dir=os.getenv("ISTINA_DATA_DIR", "./data"),
         rate_limit_rpm=int(os.getenv("ISTINA_RATE_LIMIT_RPM", "60")),
+        gemini_api_key=os.getenv("ISTINA_GEMINI_API_KEY", ""),
+        gemini_model=os.getenv("ISTINA_GEMINI_MODEL", "gemini-1.5-pro"),
     )
 
 def validate_settings(settings: Settings):

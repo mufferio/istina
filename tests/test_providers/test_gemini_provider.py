@@ -489,3 +489,242 @@ if __name__ == "__main__":
     print("Contains confidence guidance:", "0.0-0.3" in claims_prompt)
     
     print("\\n✅ Prompt templates are comprehensive and well-structured!")
+
+
+class TestGeminiResponseParsing:
+    """Test realistic Gemini response parsing and BiasScore generation."""
+    
+    def test_parse_realistic_gemini_responses(self, sample_article, mock_settings_dict):
+        """Test parsing realistic Gemini API responses returns valid BiasScore."""
+        
+        # Create realistic bias analysis response
+        bias_response = {
+            "candidates": [{
+                "content": {
+                    "parts": [{
+                        "text": '''{
+  "overall_bias_label": "left",
+  "rhetorical_flags": ["loaded_language", "appeal_to_fear"],
+  "confidence": 0.75,
+  "justification": "Article uses emotionally charged phrases like 'devastating the economy' and 'saving the planet' suggesting partisan framing."
+}'''
+                    }]
+                }
+            }]
+        }
+        
+        # Create realistic claims analysis response
+        claims_response = {
+            "candidates": [{
+                "content": {
+                    "parts": [{
+                        "text": '''{
+  "claim_checks": [
+    {
+      "claim": "The administration unveiled sweeping climate regulations",
+      "verdict": "true",
+      "confidence": 0.9,
+      "evidence": ["Policy announcement confirmed by official sources"]
+    },
+    {
+      "claim": "Critics say regulations will devastate the economy",
+      "verdict": "mixed", 
+      "confidence": 0.6,
+      "evidence": ["Opposition statements documented", "Economic impact disputed"]
+    }
+  ]
+}'''
+                    }]
+                }
+            }]
+        }
+        
+        # Mock the HTTP responses
+        mock_response_bias = Mock()
+        mock_response_bias.status_code = 200
+        mock_response_bias.json.return_value = bias_response
+        
+        mock_response_claims = Mock()
+        mock_response_claims.status_code = 200
+        mock_response_claims.json.return_value = claims_response
+        
+        # Create provider and mock HTTP calls to return different responses
+        provider = GeminiProvider.from_settings(mock_settings_dict)
+        provider._post = Mock(side_effect=[mock_response_bias, mock_response_claims])
+        
+        # Analyze article
+        result = provider.analyze_article(sample_article)
+        
+        # Verify BiasScore structure and content
+        assert isinstance(result, BiasScore)
+        assert result.article_id == sample_article.id
+        assert result.provider == "gemini"
+        
+        # Verify parsed bias analysis
+        assert result.overall_bias_label == "left"
+        assert "loaded_language" in result.rhetorical_bias
+        assert "appeal_to_fear" in result.rhetorical_bias
+        assert len(result.rhetorical_bias) == 2
+        assert result.confidence == 0.75
+        
+        # Verify parsed claim checks
+        assert len(result.claim_checks) == 2
+        
+        first_claim = result.claim_checks[0]
+        assert first_claim["claim"] == "The administration unveiled sweeping climate regulations"
+        assert first_claim["verdict"] == "true"
+        assert first_claim["confidence"] == 0.9
+        assert "Policy announcement confirmed" in first_claim["evidence"][0]
+        
+        second_claim = result.claim_checks[1]
+        assert second_claim["claim"] == "Critics say regulations will devastate the economy"
+        assert second_claim["verdict"] == "mixed"
+        assert second_claim["confidence"] == 0.6
+        
+        # Verify metadata
+        assert isinstance(result.timestamp, datetime)
+        assert result.timestamp.tzinfo is not None
+        
+        # Verify raw_response preservation
+        assert "bias_call" in result.raw_response
+        assert "claims_call" in result.raw_response
+        assert result.raw_response["model"] == "gemini-1.5-pro"
+        
+        print(f"✅ Parsed BiasScore: {result.overall_bias_label} bias, {result.confidence} confidence")
+        print(f"   Rhetorical flags: {result.rhetorical_bias}")
+        print(f"   Claims analyzed: {len(result.claim_checks)}")
+
+    def test_parse_malformed_responses_with_fallbacks(self, sample_article, mock_settings_dict):
+        """Test that malformed Gemini responses fall back gracefully."""
+        
+        # Malformed bias response (invalid JSON)
+        bias_response = {
+            "candidates": [{
+                "content": {
+                    "parts": [{
+                        "text": "This is not JSON, just some text response from the model."
+                    }]
+                }
+            }]
+        }
+        
+        # Malformed claims response (missing required fields)
+        claims_response = {
+            "candidates": [{
+                "content": {
+                    "parts": [{
+                        "text": '''```json
+{
+  "claim_checks": [
+    {
+      "broken": "no claim field",
+      "invalid": "data structure"
+    }
+  ]
+}
+```'''
+                    }]
+                }
+            }]
+        }
+        
+        # Mock the HTTP responses
+        mock_response_bias = Mock()
+        mock_response_bias.status_code = 200
+        mock_response_bias.json.return_value = bias_response
+        
+        mock_response_claims = Mock()
+        mock_response_claims.status_code = 200
+        mock_response_claims.json.return_value = claims_response
+        
+        # Create provider and analyze
+        provider = GeminiProvider.from_settings(mock_settings_dict)
+        provider._post = Mock(side_effect=[mock_response_bias, mock_response_claims])
+        
+        result = provider.analyze_article(sample_article)
+        
+        # Verify fallback values
+        assert result.overall_bias_label == "unknown"  # Fallback for invalid bias
+        assert result.rhetorical_bias == []  # Fallback for invalid bias
+        assert result.confidence == 0.0  # Fallback for invalid bias
+        
+        # Verify fallback claim check
+        assert len(result.claim_checks) == 1
+        fallback_claim = result.claim_checks[0]
+        assert fallback_claim["verdict"] == "insufficient evidence"
+        assert fallback_claim["confidence"] == 0.0
+        assert "insufficient evidence" in fallback_claim["evidence"]
+        
+        print("✅ Malformed responses handled gracefully with fallbacks")
+
+    def test_parse_fenced_json_responses(self, sample_article, mock_settings_dict):
+        """Test parsing JSON wrapped in markdown code fences."""
+        
+        # Response with markdown fences (common LLM behavior)
+        bias_response = {
+            "candidates": [{
+                "content": {
+                    "parts": [{
+                        "text": '''Here's my analysis:
+
+```json
+{
+  "overall_bias_label": "center",
+  "rhetorical_flags": ["cherry_picking"],
+  "confidence": 0.6,
+  "justification": "Article presents both sides but selectively emphasizes certain facts."
+}
+```
+
+This analysis is based on the framework provided.'''
+                    }]
+                }
+            }]
+        }
+        
+        # Claims with trailing comma (common JSON error)
+        claims_response = {
+            "candidates": [{
+                "content": {
+                    "parts": [{
+                        "text": '''{
+  "claim_checks": [
+    {
+      "claim": "Policy has bipartisan support",
+      "verdict": "unverified",
+      "confidence": 0.3,
+      "evidence": ["Limited polling data available",],
+    },
+  ]
+}'''
+                    }]
+                }
+            }]
+        }
+        
+        # Mock responses
+        mock_response_bias = Mock()
+        mock_response_bias.status_code = 200
+        mock_response_bias.json.return_value = bias_response
+        
+        mock_response_claims = Mock() 
+        mock_response_claims.status_code = 200
+        mock_response_claims.json.return_value = claims_response
+        
+        # Test parsing
+        provider = GeminiProvider.from_settings(mock_settings_dict)
+        provider._post = Mock(side_effect=[mock_response_bias, mock_response_claims])
+        
+        result = provider.analyze_article(sample_article)
+        
+        # Verify fenced JSON was parsed correctly
+        assert result.overall_bias_label == "center"
+        assert "cherry_picking" in result.rhetorical_bias
+        assert result.confidence == 0.6
+        
+        # Verify trailing comma was handled
+        assert len(result.claim_checks) == 1
+        assert result.claim_checks[0]["claim"] == "Policy has bipartisan support"
+        assert result.claim_checks[0]["verdict"] == "unverified"
+        
+        print("✅ Fenced JSON and trailing commas parsed successfully")

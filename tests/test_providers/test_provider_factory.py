@@ -75,18 +75,10 @@ class TestProviderFactory:
         provider = create_provider(settings)
         assert isinstance(provider, MockProvider)
 
-    def test_gemini_provider_fails_without_implementation(self, gemini_settings):
-        """Test that requesting Gemini provider fails gracefully."""
-        with pytest.raises(ConfigError, match="gemini selected but GeminiProvider is not implemented"):
-            create_provider(gemini_settings)
-
-    def test_gemini_provider_fails_without_api_key(self):
+    def test_gemini_provider_fails_without_api_key(self, gemini_settings):
         """Test that Gemini provider requires API key."""
-        # This test will fail at import, but we can test the logic path
-        settings = Settings(provider="gemini")  # no api key
-        
-        with pytest.raises(ConfigError):
-            create_provider(settings)
+        with pytest.raises(ValueError, match="gemini_api_key is required to instantiate GeminiProvider"):
+            create_provider(gemini_settings)
 
     def test_invalid_provider_raises_error(self):
         """Test that invalid provider names raise ConfigError."""

@@ -20,9 +20,11 @@ Important:
 """
 from __future__ import annotations
 
+import json
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import httpx
 
@@ -30,12 +32,7 @@ from istina.model.entities.article import Article
 from istina.model.entities.bias_score import BiasScore
 from istina.model.providers.base_provider import BaseProvider
 from istina.utils.rate_limiter import RateLimiter, maybe_acquire
-from istina.utils.retry import retry 
-
-
-import json
-import re
-from typing import List, Tuple
+from istina.utils.retry import retry
 
 
 VALID_LABELS = {"left", "center", "right", "unknown"}
@@ -372,6 +369,202 @@ Return ONLY a valid JSON object with this exact structure:
 """.strip()
 
 
+VALID_LABELS = {"left", "center", "right", "unknown"}
+VALID_VERDICTS = {"true", "false", "mixed", "unverified", "insufficient evidence"}
+
+
+def _clamp01(x: Any, default: float = 0.0) -> float:
+    try:
+        v = float(x)
+    except Exception:
+        return default
+    if v < 0.0:
+        return 0.0
+    if v > 1.0:
+        return 1.0
+    return v
+
+
+def _extract_model_text(gemini_payload: Dict[str, Any]) -> str:
+    """
+    Pull the main text from a Gemini generateContent response.
+    Robust against missing fields.
+    """
+    try:
+        candidates = gemini_payload.get("candidates") or []
+        if not candidates:
+            return ""
+        content = candidates[0].get("content") or {}
+        parts = content.get("parts") or []
+        if not parts:
+            return ""
+        # Gemini often returns [{"text": "..."}]
+        text = parts[0].get("text")
+        return text if isinstance(text, str) else ""
+    except Exception:
+        return ""
+
+
+_JSON_FENCE_RE = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL)
+_JSON_OBJ_RE = re.compile(r"(\{.*\})", re.DOTALL)
+
+
+def _safe_json_loads_from_text(text: str) -> Optional[Dict[str, Any]]:
+    """
+    Try hard to parse a JSON object from model text:
+    - handles ```json fenced blocks
+    - handles extra prose before/after JSON
+    - returns None if can't parse
+    """
+    if not text or not isinstance(text, str):
+        return None
+
+    text = text.strip()
+
+    # 1) Try direct parse
+    try:
+        obj = json.loads(text)
+        return obj if isinstance(obj, dict) else None
+    except Exception:
+        pass
+
+    # 2) Try fenced JSON
+    m = _JSON_FENCE_RE.search(text)
+    if m:
+        snippet = m.group(1)
+        try:
+            obj = json.loads(snippet)
+            return obj if isinstance(obj, dict) else None
+        except Exception:
+            pass
+
+    # 3) Try largest {...} block
+    m = _JSON_OBJ_RE.search(text)
+    if m:
+        snippet = m.group(1).strip()
+        # common trailing commas fix (minimal)
+        snippet = re.sub(r",\s*}", "}", snippet)
+        snippet = re.sub(r",\s*]", "]", snippet)
+        try:
+            obj = json.loads(snippet)
+            return obj if isinstance(obj, dict) else None
+        except Exception:
+            return None
+
+    return None
+
+
+def _normalize_bias_obj(obj: Optional[Dict[str, Any]]) -> Tuple[str, List[str], float]:
+    """
+    Returns: (overall_bias_label, rhetorical_flags, confidence)
+    Always safe.
+    """
+    if not obj:
+        return ("unknown", [], 0.0)
+
+    label = str(obj.get("overall_bias_label", "unknown")).strip().lower()
+    if label not in VALID_LABELS:
+        label = "unknown"
+
+    flags = obj.get("rhetorical_flags", [])
+    if not isinstance(flags, list):
+        flags = []
+    flags = [str(x).strip() for x in flags if isinstance(x, (str, int, float)) and str(x).strip()]
+    # de-dupe while preserving order
+    seen = set()
+    deduped = []
+    for f in flags:
+        if f not in seen:
+            seen.add(f)
+            deduped.append(f)
+
+    conf = _clamp01(obj.get("confidence", 0.0), default=0.0)
+    return (label, deduped, conf)
+
+
+def _fallback_claim_check(reason: str = "insufficient evidence") -> Dict[str, Any]:
+    return {
+        "claim": "",
+        "verdict": "insufficient evidence",
+        "confidence": 0.0,
+        "evidence": [reason],
+    }
+
+
+def _normalize_claims_obj(obj: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Normalizes claim_checks to a list of dicts:
+      {claim:str, verdict:str, confidence:float, evidence:list[str]}
+    If malformed, returns a single fallback entry (per issue).
+    """
+    if not obj:
+        return [_fallback_claim_check("insufficient evidence")]
+
+    claims = obj.get("claim_checks", None)
+    if not isinstance(claims, list) or len(claims) == 0:
+        return [_fallback_claim_check("insufficient evidence")]
+
+    normalized: List[Dict[str, Any]] = []
+
+    for item in claims:
+        if not isinstance(item, dict):
+            continue
+
+        claim = item.get("claim", "")
+        claim = claim if isinstance(claim, str) else str(claim)
+
+        verdict = str(item.get("verdict", "unverified")).strip().lower()
+        if verdict not in VALID_VERDICTS:
+            verdict = "unverified"
+
+        conf = _clamp01(item.get("confidence", 0.0), default=0.0)
+
+        evidence = item.get("evidence", [])
+        if not isinstance(evidence, list):
+            evidence = []
+        evidence = [str(e).strip() for e in evidence if str(e).strip()]
+
+        # If it's basically empty/broken, turn into required fallback
+        if not claim.strip() and verdict in {"unverified", "insufficient evidence"} and conf == 0.0 and not evidence:
+            normalized.append(_fallback_claim_check("insufficient evidence"))
+        else:
+            normalized.append(
+                {
+                    "claim": claim.strip(),
+                    "verdict": verdict,
+                    "confidence": conf,
+                    "evidence": evidence,
+                }
+            )
+
+    if not normalized:
+        return [_fallback_claim_check("insufficient evidence")]
+
+    return normalized
+
+
+def parse_and_normalize_gemini(
+    bias_call: Dict[str, Any],
+    claims_call: Dict[str, Any],
+) -> Tuple[str, List[str], float, List[Dict[str, Any]]]:
+    """
+    Converts raw Gemini HTTP payloads into normalized fields for BiasScore.
+
+    Returns:
+      overall_label, rhetorical_flags, overall_confidence, claim_checks
+    """
+    bias_text = _extract_model_text(bias_call)
+    claims_text = _extract_model_text(claims_call)
+
+    bias_obj = _safe_json_loads_from_text(bias_text)
+    claims_obj = _safe_json_loads_from_text(claims_text)
+
+    label, flags, conf = _normalize_bias_obj(bias_obj)
+    claim_checks = _normalize_claims_obj(claims_obj)
+
+    return (label, flags, conf, claim_checks)
+
+
 @dataclass
 class GeminiProvider(BaseProvider):
     """
@@ -404,20 +597,22 @@ class GeminiProvider(BaseProvider):
         if not aid:
             raise ValueError("Article missing id")
 
-        # Build prompts (v0: two calls; later you can merge into one if desired)
+        # Build prompts
         bias_prompt = build_bias_prompt(article)
         claims_prompt = build_claims_prompt(article)
 
-        # Call provider (no perfect parsing required yet)
+        # Call provider and parse responses with robust error handling
         bias_raw = self._call_gemini(bias_prompt)
         claims_raw = self._call_gemini(claims_prompt)
 
+        # Store raw_response for debugging/auditing; NEVER include api key.
         raw_response: Dict[str, Any] = {
             "bias_call": bias_raw,
             "claims_call": claims_raw,
             "model": self.model,
         }
 
+        # Parse and normalize Gemini responses with robust error handling
         overall, rhetorical_flags, confidence, claim_checks = parse_and_normalize_gemini(
             bias_raw, claims_raw
         )
