@@ -26,7 +26,7 @@ from typing import List, Dict, Any
 from datetime import datetime
 
 
-VALID_PROVIDERS = {"mock", "gpt-3.5", "gpt-4"}
+VALID_PROVIDERS = {"mock", "gemini", "gpt-3.5", "gpt-4"}
 VALID_LABELS = ("left", "center", "right", "unknown")
 
 @dataclass
