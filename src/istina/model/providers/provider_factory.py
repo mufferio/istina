@@ -74,19 +74,19 @@ def create_provider(settings: Any) -> BaseProvider:
         # For now we raise a clear error if someone selects it without implementation.
         # If you already have a GeminiProvider, import and return it here.
         try:
-            from istina.model.providers.gemini_provider import GeminiProvider  # type: ignore
+            from istina.model.providers.gemini_provider import GeminiProvider
+            from istina.utils.rate_limiter import RateLimiter
         except Exception as e:
             raise ConfigError(
                 "provider=gemini selected but GeminiProvider is not implemented/available"
             ) from e
 
-        api_key = _get_setting(settings, "gemini_api_key", None)
-        model = _get_setting(settings, "gemini_model", "gemini-1.5-pro")
+        # Create rate limiter based on settings
+        rate_limit_rpm = _get_setting(settings, "rate_limit_rpm", 60)
+        limiter = RateLimiter(rpm=rate_limit_rpm) if rate_limit_rpm > 0 else None
 
-        if not api_key:
-            raise ConfigError("gemini_api_key is required when provider=gemini")
-
-        return GeminiProvider(api_key=api_key, model=model)
+        # Use the from_settings class method for proper configuration
+        return GeminiProvider.from_settings(settings, limiter=limiter)
 
     raise ConfigError(f"Unsupported provider: {provider_name!r}. Expected 'mock' or 'gemini'.")
     
