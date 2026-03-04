@@ -4,7 +4,7 @@ AnalysisService (use case).
 Workflow:
 1) Select which Articles to analyze (unscored or filtered by params).
 2) For each Article:
-   - Run ScoringVisitor/Provider to produce BiasScore
+   - Run visitor.visit(article) to produce BiasScore
    - Persist BiasScore via repository
 3) Return summary stats + failures.
 
@@ -16,11 +16,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import List, Optional, Protocol
+from typing import List, Optional, Protocol, Union
 
 from istina.model.entities.article import Article
 from istina.model.entities.bias_score import BiasScore
 from istina.model.repositories.base_repository import BaseRepository
+from istina.model.visitors.article_visitor import ArticleVisitor
+from istina.model.visitors.scoring_visitor import ScoringVisitor
 
 
 @dataclass(frozen=True)
@@ -33,7 +35,7 @@ class SelectionParams:
 class BiasProvider(Protocol):
     """
     Provider interface (mockable) for analyzing an article.
-    Later you can swap this with a Visitor pattern if desired.
+    Pass directly to analyze() and it will be wrapped in a ScoringVisitor automatically.
     """
     def analyze_article(self, article: Article) -> BiasScore:
         """Given an Article, return a BiasScore."""
@@ -98,23 +100,32 @@ class AnalysisService:
 
     def analyze(
         self,
-        provider: BiasProvider,
+        visitor_or_provider: Union[ArticleVisitor, BiasProvider],
         params: Optional[SelectionParams] = None,
     ) -> AnalyzeResult:
         """
         Analyze selected (unscored) articles and persist BiasScores.
 
+        Accepts either:
+        - An ArticleVisitor (e.g. ScoringVisitor) — used directly.
+        - A BiasProvider — automatically wrapped in ScoringVisitor.
+
         Requirements (Issue 5.4):
         - loops selected articles
-        - calls provider.analyze_article(article)
+        - calls visitor.visit(article)
         - repo.upsert_bias_score(score)
         - collects stats (analyzed/skipped/failed)
-        - handles provider errors gracefully (record failure, continue)
+        - handles visitor/provider errors gracefully (record failure, continue)
 
         Notes:
         - "skipped" here means: article was selected but ended up not analyzable
-          (e.g., missing id) or provider returned invalid score.
+          (e.g., missing id) or visitor returned invalid score.
         """
+        # Build visitor: accept a raw provider for backward compat
+        if isinstance(visitor_or_provider, ArticleVisitor):
+            visitor = visitor_or_provider
+        else:
+            visitor = ScoringVisitor(provider=visitor_or_provider)
         selected = self.select_unscored(params)
 
         analyzed = 0
@@ -130,7 +141,7 @@ class AnalysisService:
                 continue
 
             try:
-                score = provider.analyze_article(article)
+                score = visitor.visit(article)
 
                 if getattr(score, "article_id", None) != article_id:
                     skipped += 1
