@@ -65,6 +65,75 @@ Run the smoke test manually at any time:
 python3 scripts/smoke_test_rss.py
 ```
 
-## 📦 Installation
+## �️ Storage Format (CLI v0)
+
+Istina persists data as **newline-delimited JSON** (JSONL) in the `data/` directory.
+Each line is one self-contained JSON object — never pretty-printed.
+
+### Files
+
+| File | Contents |
+|---|---|
+| `data/articles.jsonl` | One `Article` record per line |
+| `data/bias_scores.jsonl` | One `BiasScore` record per line |
+
+### Article record (`schema_version = 1`)
+
+```json
+{
+  "schema_version":  1,
+  "id":              "a3f8c2d...",
+  "title":           "Gaza ceasefire talks resume in Cairo",
+  "url":             "https://bbc.co.uk/news/world-middle-east-123456",
+  "source":          "BBC News",
+  "published_at":    "2026-03-04T12:00:00Z",
+  "summary":         "Negotiators from both sides ..."
+}
+```
+
+Nullable fields: `published_at`, `summary` may be `null`.
+
+### BiasScore record (`schema_version = 1`)
+
+```json
+{
+  "schema_version":      1,
+  "article_id":          "a3f8c2d...",
+  "provider":            "gemini",
+  "overall_bias_label":  "center",
+  "rhetorical_bias":     ["loaded_language"],
+  "claim_checks": [
+    {
+      "claim_text": "The ceasefire was unconditional.",
+      "verdict":    "contradicted",
+      "evidence":   ["https://reuters.com/..."]
+    }
+  ],
+  "confidence":    0.87,
+  "timestamp":     "2026-03-04T14:05:00",
+  "raw_response":  null
+}
+```
+
+Nullable field: `raw_response` may be `null`.
+
+### Update policies
+
+| Entity | Policy |
+|---|---|
+| `Article` | **First write wins** — once an `id` is stored it is never overwritten. |
+| `BiasScore` | **Latest write wins** — a new record for the same `(article_id, provider)` pair is appended; on load only the *last* occurrence is kept. Call `FileRepository.compact()` to collapse superseded lines. |
+
+### Atomicity
+
+Full-file rewrites (e.g. `compact()`) write to a temp file in the same directory
+then use `os.replace()` so a crash mid-write never leaves a half-written file.
+
+### Implementation
+
+See [`src/istina/model/repositories/file_repository.py`](src/istina/model/repositories/file_repository.py)
+for the full `FileRepository` implementation.  Smoke test: [`tests/test_file_repository_roundtrip.py`](tests/test_file_repository_roundtrip.py).
+
+## �📦 Installation
 
 - *Coming soon ;)*
