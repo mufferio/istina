@@ -37,6 +37,10 @@ class ScoringVisitor(ArticleVisitor):
     """
 
     def __init__(self, provider: _BiasProvider) -> None:
+        if provider is None:
+            raise ValueError("provider must not be None")
+        if not callable(getattr(provider, "analyze_article", None)):
+            raise TypeError("provider must expose a callable .analyze_article(article) method")
         self._provider = provider
 
     def visit(self, article: Article) -> BiasScore:
