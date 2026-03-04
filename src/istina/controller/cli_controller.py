@@ -32,7 +32,15 @@ from istina.controller.services.ingest_service import IngestService
 from istina.controller.services.report_service import ReportService
 from istina.model.providers.provider_factory import create_provider
 from istina.model.repositories.memory_repository import MemoryRepository
-from istina.utils.error_handling import format_error
+from istina.utils.error_handling import (
+    AdapterError,
+    ConfigError,
+    ProviderError,
+    RepositoryError,
+    ValidationError,
+    format_error,
+    format_exception,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -44,6 +52,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="istina",
         description="Istina — RSS ingestion, bias analysis, and reporting CLI.",
+    )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        default=False,
+        help="Show full stack traces instead of friendly error messages.",
     )
 
     sub = parser.add_subparsers(dest="command", metavar="COMMAND")
@@ -157,6 +171,7 @@ class CLIController:
         self._settings = settings
         self._repo = repo
         self._logger = logging.getLogger("istina")
+        self._debug: bool = False  # updated in run() after arg parse
 
     # ------------------------------------------------------------------
     # Public entry point
@@ -172,14 +187,21 @@ class CLIController:
         """
         parser = build_parser()
         args = parser.parse_args(argv)
+        self._debug = getattr(args, "debug", False)
 
         try:
             return self._dispatch(args)
         except KeyboardInterrupt:
             print("\nInterrupted.", file=sys.stderr)
             return 130
-        except Exception as exc:  # unexpected bug; show verbose detail
-            print(f"Unexpected error: {format_error(exc, verbose=True)}", file=sys.stderr)
+        except Exception as exc:  # unexpected bug
+            if self._debug:
+                print(format_exception(exc, debug=True), file=sys.stderr)
+            else:
+                print(
+                    f"Unexpected error: {format_error(exc, verbose=True)}",
+                    file=sys.stderr,
+                )
             self._logger.exception("Unhandled exception in CLIController.run")
             return 1
 
@@ -187,16 +209,40 @@ class CLIController:
     # Internal dispatch
     # ------------------------------------------------------------------
 
+    def _print_error(self, exc: BaseException, *, prefix: str = "Error") -> None:
+        """Print a formatted error to stderr, respecting --debug mode."""
+        if self._debug:
+            import traceback
+            print(traceback.format_exc(), file=sys.stderr)
+        else:
+            print(f"{prefix}: {format_error(exc)}", file=sys.stderr)
+
     def _dispatch(self, args: argparse.Namespace) -> int:
-        if args.command == "ingest":
-            return self._run_ingest(args)
-        if args.command == "analyze":
-            return self._run_analyze(args)
-        if args.command == "summarize":
-            return self._run_summarize(args)
-        # argparse guarantees we never reach here, but keep it defensive
-        print(f"Unknown command: {args.command}", file=sys.stderr)
-        return 1
+        try:
+            if args.command == "ingest":
+                return self._run_ingest(args)
+            if args.command == "analyze":
+                return self._run_analyze(args)
+            if args.command == "summarize":
+                return self._run_summarize(args)
+            # argparse guarantees we never reach here, but keep it defensive
+            print(f"Unknown command: {args.command}", file=sys.stderr)
+            return 1
+        except ConfigError as exc:
+            self._print_error(exc, prefix="Configuration error")
+            return 1
+        except ProviderError as exc:
+            self._print_error(exc, prefix="Provider error")
+            return 1
+        except AdapterError as exc:
+            self._print_error(exc, prefix="Adapter error")
+            return 1
+        except ValidationError as exc:
+            self._print_error(exc, prefix="Validation error")
+            return 1
+        except RepositoryError as exc:
+            self._print_error(exc, prefix="Repository error")
+            return 1
 
     def _run_ingest(self, args: argparse.Namespace) -> int:
         service = IngestService(repo=self._repo)
@@ -208,7 +254,7 @@ class CLIController:
                 for err in result.data.errors:
                     print(f"  [warning] {err}", file=sys.stderr)
             return 0
-        print(f"Error: {format_error(Exception(result.error))}", file=sys.stderr)
+        print(f"Error: {result.error}", file=sys.stderr)
         return 1
 
     def _run_analyze(self, args: argparse.Namespace) -> int:
@@ -232,7 +278,7 @@ class CLIController:
                 for err in result.data.errors:
                     print(f"  [warning] {err}", file=sys.stderr)
             return 0
-        print(f"Error: {format_error(Exception(result.error))}", file=sys.stderr)
+        print(f"Error: {result.error}", file=sys.stderr)
         return 1
 
     def _run_summarize(self, args: argparse.Namespace) -> int:
@@ -248,5 +294,5 @@ class CLIController:
         if result.success:
             print(result.data)
             return 0
-        print(f"Error: {format_error(Exception(result.error))}", file=sys.stderr)
+        print(f"Error: {result.error}", file=sys.stderr)
         return 1

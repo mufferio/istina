@@ -27,17 +27,21 @@ import sys
 from istina.config.settings import load_settings, validate_settings
 from istina.controller.cli_controller import CLIController
 from istina.model.repositories.memory_repository import MemoryRepository
-from istina.utils.error_handling import ConfigError, format_error
+from istina.utils.error_handling import ConfigError, format_exception
 from istina.utils.logger import configure_logger
 
 
 def main() -> int:
+    # Detect --debug early (before full arg parse) so config errors are also verbose.
+    debug: bool = "--debug" in sys.argv
+
     # 1. Load and validate settings
     try:
         settings = load_settings()
         validate_settings(settings)
     except (ConfigError, ValueError) as exc:
-        print(f"Configuration error: {format_error(exc)}", file=sys.stderr)
+        msg = format_exception(exc, debug=debug)
+        print(f"Configuration error: {msg}", file=sys.stderr)
         return 1
 
     # 2. Configure logger early so subsequent steps can log
