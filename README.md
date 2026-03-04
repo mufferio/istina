@@ -134,6 +134,122 @@ then use `os.replace()` so a crash mid-write never leaves a half-written file.
 See [`src/istina/model/repositories/file_repository.py`](src/istina/model/repositories/file_repository.py)
 for the full `FileRepository` implementation.  Smoke test: [`tests/test_file_repository_roundtrip.py`](tests/test_file_repository_roundtrip.py).
 
-## �📦 Installation
+## ⚡ Quick Start
 
-- *Coming soon ;)*
+```bash
+# 1. clone
+git clone https://github.com/mufferio/istina.git
+cd istina
+
+# 2. create and activate a virtual environment
+python -m venv .venv
+# Windows
+.venv\Scripts\activate
+# macOS / Linux
+source .venv/bin/activate
+
+# 3. install dependencies and the package in editable mode
+pip install -r requirements.txt
+pip install -e .
+
+# 4. run a full pipeline with the built-in mock provider (no API key needed)
+python main.py ingest --feeds "http://feeds.bbci.co.uk/news/rss.xml"
+python main.py analyze --limit 5
+python main.py summarize
+```
+
+## 📦 Requirements
+
+| Requirement | Version |
+|---|---|
+| Python | ≥ 3.11 |
+| pip dependencies | `requirements.txt` |
+
+## ⚙️ Configuration
+
+All settings are controlled by **environment variables** (or a `.env` file in the project root).
+
+| Variable | Default | Description |
+|---|---|---|
+| `ISTINA_REPO_TYPE` | `memory` | `file` — persist to disk; `memory` — in-process only |
+| `ISTINA_DATA_DIR` | `./data` | Directory for JSONL storage files (used when `ISTINA_REPO_TYPE=file`) |
+| `ISTINA_PROVIDER` | `mock` | AI provider: `mock`, `gemini` |
+| `ISTINA_ENV` | `dev` | Runtime environment: `dev`, `test`, `prod` |
+| `ISTINA_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
+| `ISTINA_RATE_LIMIT_RPM` | `60` | Max provider calls per minute |
+| `ISTINA_GEMINI_API_KEY` | *(empty)* | Required only when `ISTINA_PROVIDER=gemini` |
+| `ISTINA_GEMINI_MODEL` | `gemini-2.5-flash` | Gemini model name |
+
+Create a `.env` file in the project root to persist settings across sessions:
+
+```dotenv
+ISTINA_REPO_TYPE=file
+ISTINA_PROVIDER=mock
+ISTINA_DATA_DIR=./data
+ISTINA_LOG_LEVEL=INFO
+```
+
+## 🖥️ CLI Commands
+
+All commands are run via `python main.py <command> [options]`.
+
+### `ingest` — fetch RSS feeds and store articles
+
+```bash
+python main.py ingest --feeds <URL> [<URL> ...]
+
+# Examples
+python main.py ingest --feeds "http://feeds.bbci.co.uk/news/rss.xml"
+python main.py ingest --feeds "http://feeds.bbci.co.uk/news/rss.xml" \
+                              "https://www.aljazeera.com/xml/rss/all.xml"
+```
+
+### `analyze` — run bias analysis on stored articles
+
+```bash
+python main.py analyze [--limit N] [--source SOURCE] [--since ISO_DATE]
+
+# Examples
+python main.py analyze                        # analyze all unscored articles
+python main.py analyze --limit 10             # cap at 10 articles
+python main.py analyze --source "BBC News"    # only articles from BBC News
+python main.py analyze --since 2026-03-01     # only articles published after this date
+```
+
+### `summarize` — print a bias report
+
+```bash
+python main.py summarize [--report summary|full] [--source SOURCE] [--limit N] [--article-id ID]
+
+# Examples
+python main.py summarize                          # default summary view
+python main.py summarize --report full            # per-article detail
+python main.py summarize --report full --limit 5  # top 5 articles in full detail
+```
+
+### Global flags
+
+| Flag | Effect |
+|---|---|
+| `--debug` | Print full stack traces instead of friendly error messages |
+| `-h` / `--help` | Show usage for any command |
+
+## 🧪 Running Tests
+
+```bash
+# run the full test suite
+pytest
+
+# run with verbose output
+pytest -v
+
+# run a specific test file
+pytest tests/test_repositories/test_file_repository.py -v
+
+# run only fast tests (skip live API tests)
+pytest --ignore=tests/test_providers/test_gemini_live_smoke.py
+```
+
+The suite covers unit tests, integration tests, and round-trip persistence tests.
+Live Gemini API tests are automatically skipped unless `ISTINA_GEMINI_API_KEY` is set —
+see [`docs/GEMINI_LIVE_TESTS.md`](docs/GEMINI_LIVE_TESTS.md) for details.
