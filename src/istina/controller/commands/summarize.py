@@ -18,7 +18,7 @@ from typing import Literal, Optional
 
 from istina.controller.commands.base_command import BaseCommand, CommandResult
 from istina.controller.services.report_service import ReportService
-from istina.view.render_report import render_report
+from istina.view.render_report import render_full_report
 from istina.view.render_summary import render_summary
 
 ReportMode = Literal["summary", "full"]
@@ -80,7 +80,7 @@ class SummarizeCommand(BaseCommand[str]):
                     source=self._source,
                     limit=self._limit,
                 )
-                text = render_report(pairs)
+                text = render_full_report(pairs)
         except Exception as exc:
             return CommandResult(
                 success=False,
