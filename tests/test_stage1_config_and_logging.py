@@ -38,6 +38,13 @@ def test_stage1_load_settings_reads_dotenv_and_env(monkeypatch, tmp_path: Path):
     # Run load_settings() from that directory so dotenv finds tmp .env
     monkeypatch.chdir(tmp_path)
 
+    # Clear any ISTINA_* env vars that may be set in the outer shell so this
+    # test only sees the values from the temp .env file above.
+    for var in ("ISTINA_ENV", "ISTINA_PROVIDER", "ISTINA_REPO_TYPE",
+                "ISTINA_LOG_LEVEL", "ISTINA_DATA_DIR", "ISTINA_RATE_LIMIT_RPM",
+                "ISTINA_GEMINI_API_KEY", "ISTINA_GEMINI_MODEL"):
+        monkeypatch.delenv(var, raising=False)
+
     s = load_settings()
     assert s.provider == "mock"
     assert s.repo_type == "memory"
