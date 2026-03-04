@@ -31,6 +31,7 @@ from istina.controller.services.analysis_service import AnalysisService, Selecti
 from istina.controller.services.ingest_service import IngestService
 from istina.controller.services.report_service import ReportService
 from istina.model.providers.provider_factory import create_provider
+from istina.model.repositories.base_repository import BaseRepository
 from istina.model.repositories.memory_repository import MemoryRepository
 from istina.utils.error_handling import (
     AdapterError,
@@ -167,7 +168,7 @@ class CLIController:
         sys.exit(ctrl.run(sys.argv[1:]))
     """
 
-    def __init__(self, settings: Settings, repo: MemoryRepository) -> None:
+    def __init__(self, settings: Settings, repo: BaseRepository) -> None:
         self._settings = settings
         self._repo = repo
         self._logger = logging.getLogger("istina")
