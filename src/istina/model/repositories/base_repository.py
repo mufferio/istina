@@ -91,9 +91,13 @@ class BaseRepository(ABC):
         pass
 
     @abstractmethod
-    def get_bias_score(self, article_id: str, provider: str) -> Optional[BiasScore]:
+    def get_bias_score(self, article_id: str, provider: Optional[str] = None) -> Optional[BiasScore]:
         """
         Fetch the BiasScore for an article_id.
+
+        ``provider`` is accepted for forward-compatibility but is currently
+        unused by all implementations — scores are keyed by ``article_id`` alone
+        (one score per article, latest write wins).
 
         Returns:
             BiasScore if found, otherwise None.

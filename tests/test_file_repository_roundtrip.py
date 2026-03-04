@@ -127,7 +127,7 @@ class TestBiasScoreRoundtrip:
         tmp_repo.add_articles([sample_article])
         tmp_repo.upsert_bias_score(sample_score)
 
-        loaded = tmp_repo.get_bias_score(sample_score.article_id, sample_score.provider)
+        loaded = tmp_repo.get_bias_score(sample_score.article_id)
         assert loaded is not None
         assert loaded.article_id == sample_score.article_id
         assert loaded.provider == sample_score.provider
@@ -155,7 +155,7 @@ class TestBiasScoreRoundtrip:
         repo1.upsert_bias_score(sample_score)
 
         repo2 = FileRepository(base_dir=tmp_path)
-        loaded = repo2.get_bias_score(sample_score.article_id, sample_score.provider)
+        loaded = repo2.get_bias_score(sample_score.article_id)
         assert loaded is not None
         assert loaded.article_id == sample_score.article_id
 
@@ -182,7 +182,7 @@ class TestBiasScoreRoundtrip:
         assert len(lines) == 2
 
         # ... but in-memory index holds only the latest
-        loaded = tmp_repo.get_bias_score(sample_score.article_id, sample_score.provider)
+        loaded = tmp_repo.get_bias_score(sample_score.article_id)
         assert loaded is not None
         assert loaded.overall_bias_label == "left"
         assert abs(loaded.confidence - 0.55) < 1e-9
@@ -206,7 +206,7 @@ class TestBiasScoreRoundtrip:
         repo1.upsert_bias_score(updated)
 
         repo2 = FileRepository(base_dir=tmp_path)
-        loaded = repo2.get_bias_score(sample_score.article_id, sample_score.provider)
+        loaded = repo2.get_bias_score(sample_score.article_id)
         assert loaded is not None
         assert loaded.overall_bias_label == "right"
 

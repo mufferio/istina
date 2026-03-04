@@ -117,10 +117,16 @@ def _read_jsonl(path: Path) -> List[dict]:
 
 
 def _append_jsonl(path: Path, record: dict) -> None:
-    """Append one JSON object as a single line to *path*."""
+    """Append one JSON object as a single line to *path*.
+
+    Calls ``flush()`` then ``os.fsync()`` before returning so the record is
+    committed to storage even if the process exits immediately afterwards.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+        fh.flush()
+        os.fsync(fh.fileno())
 
 
 def _rewrite_jsonl(path: Path, records: Iterable[dict]) -> None:
@@ -177,8 +183,8 @@ class FileRepository(BaseRepository):
         self._articles: Dict[str, Article] = {}
         self._insert_index: Dict[str, int] = {}
         self._next_idx: int = 0
-        # BiasScores keyed by (article_id, provider)
-        self._scores: Dict[Tuple[str, str], BiasScore] = {}
+        # BiasScores keyed by article_id (one score per article, latest write wins)
+        self._scores: Dict[str, BiasScore] = {}
 
         self._load()
 
@@ -208,7 +214,7 @@ class FileRepository(BaseRepository):
             except (ValueError, KeyError):
                 continue
             # latest write wins — always overwrite the in-memory slot
-            self._scores[(score.article_id, score.provider)] = score
+            self._scores[score.article_id] = score
 
     # ── BaseRepository interface ──────────────────────────────────────────────
 
@@ -287,10 +293,10 @@ class FileRepository(BaseRepository):
         """
         rec = {**score.to_dict(), "schema_version": SCHEMA_VERSION}
         _append_jsonl(self._scores_path, rec)
-        self._scores[(score.article_id, score.provider)] = score
+        self._scores[score.article_id] = score
 
-    def get_bias_score(self, article_id: str, provider: str) -> Optional[BiasScore]:
-        return self._scores.get((article_id, provider))
+    def get_bias_score(self, article_id: str, provider: Optional[str] = None) -> Optional[BiasScore]:  # noqa: ARG002
+        return self._scores.get(article_id)
 
     # ── housekeeping ──────────────────────────────────────────────────────────
 
@@ -313,6 +319,6 @@ class FileRepository(BaseRepository):
 
         score_records = [
             {**s.to_dict(), "schema_version": SCHEMA_VERSION}
-            for s in self._scores.values()
+            for s in self._scores.values()  # keyed by article_id
         ]
         _rewrite_jsonl(self._scores_path, score_records)

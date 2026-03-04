@@ -26,7 +26,7 @@ import sys
 
 from istina.config.settings import load_settings, validate_settings
 from istina.controller.cli_controller import CLIController
-from istina.model.repositories.memory_repository import MemoryRepository
+from istina.model.repositories.file_repository import FileRepository
 from istina.utils.error_handling import ConfigError, format_exception
 from istina.utils.logger import configure_logger
 
@@ -48,8 +48,8 @@ def main() -> int:
     logger = configure_logger(settings)
     logger.debug("Settings loaded: env=%s provider=%s", settings.env, settings.provider)
 
-    # 3. Build shared repository (v0: in-memory; swap for persistent in v1)
-    repo = MemoryRepository()
+    # 3. Build shared repository (v0: file-backed JSONL under data/)
+    repo = FileRepository(base_dir="data")
 
     # 4. Hand off to CLI controller
     controller = CLIController(settings=settings, repo=repo)
