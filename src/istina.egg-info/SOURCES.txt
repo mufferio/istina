@@ -54,9 +54,11 @@ tests/test_article_serialization.py
 tests/test_article_validation.py
 tests/test_bias_score.py
 tests/test_fetch_articles.py
+tests/test_integration_provider.py
 tests/test_json_compatibility.py
 tests/test_memory_repo_bias_score_storage.py
 tests/test_memory_repository_dedupe.py
+tests/test_rate_limiter.py
 tests/test_retry.py
 tests/test_rss_adapter.py
 tests/test_rss_adapter_extended.py

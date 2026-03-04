@@ -19,5 +19,38 @@ How it evolves:
 
 Key invariants:
 - No domain logic in main.py.
-- All “real work” happens in services and providers.
+- All real work happens in services and providers.
 """
+
+import sys
+
+from istina.config.settings import load_settings, validate_settings
+from istina.controller.cli_controller import CLIController
+from istina.model.repositories.memory_repository import MemoryRepository
+from istina.utils.error_handling import ConfigError, format_error
+from istina.utils.logger import configure_logger
+
+
+def main() -> int:
+    # 1. Load and validate settings
+    try:
+        settings = load_settings()
+        validate_settings(settings)
+    except (ConfigError, ValueError) as exc:
+        print(f"Configuration error: {format_error(exc)}", file=sys.stderr)
+        return 1
+
+    # 2. Configure logger early so subsequent steps can log
+    logger = configure_logger(settings)
+    logger.debug("Settings loaded: env=%s provider=%s", settings.env, settings.provider)
+
+    # 3. Build shared repository (v0: in-memory; swap for persistent in v1)
+    repo = MemoryRepository()
+
+    # 4. Hand off to CLI controller
+    controller = CLIController(settings=settings, repo=repo)
+    return controller.run(sys.argv[1:])
+
+
+if __name__ == "__main__":
+    sys.exit(main())
