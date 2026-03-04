@@ -10,6 +10,13 @@ Purpose:
 
 Commands:
 - ingest: fetch RSS -> store articles
-- analyze: run provider -> store BiasScore
+- analyze: run provider/visitor -> store BiasScore
 - summarize: render output to terminal
 """
+
+from istina.controller.commands.analyze import AnalyzeCommand
+from istina.controller.commands.base_command import BaseCommand, CommandResult
+from istina.controller.commands.ingest import IngestCommand
+from istina.controller.commands.summarize import SummarizeCommand
+
+__all__ = ["BaseCommand", "CommandResult", "IngestCommand", "AnalyzeCommand", "SummarizeCommand"]
