@@ -85,6 +85,7 @@ from typing import Dict, Iterable, List, Optional, Tuple
 from istina.model.entities.article import Article
 from istina.model.entities.bias_score import BiasScore
 from istina.model.repositories.base_repository import BaseRepository
+from istina.utils.error_handling import RepositoryError
 
 # ── constants ────────────────────────────────────────────────────────────────
 
@@ -95,25 +96,51 @@ SCHEMA_VERSION = 1
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
-def _read_jsonl(path: Path) -> List[dict]:
-    """Return a list of parsed JSON objects from a JSONL file.
+def _read_jsonl(path: Path) -> List[Tuple[int, dict]]:
+    """Return ``(lineno, record)`` pairs from a JSONL file (1-based line numbers).
 
     Silently skips blank lines and lines that fail to parse.
     Returns an empty list if the file does not exist.
     """
     if not path.exists():
         return []
-    records: List[dict] = []
+    records: List[Tuple[int, dict]] = []
     with path.open("r", encoding="utf-8") as fh:
-        for raw in fh:
+        for lineno, raw in enumerate(fh, start=1):
             raw = raw.strip()
             if not raw:
                 continue
             try:
-                records.append(json.loads(raw))
+                records.append((lineno, json.loads(raw)))
             except json.JSONDecodeError:
                 pass  # corrupted line — skip
     return records
+
+
+def _validate_schema_version(rec: dict, *, path: Path, lineno: int) -> None:
+    """Raise :exc:`RepositoryError` if *rec* carries an unrecognised schema version.
+
+    Rules:
+    - A missing ``schema_version`` key is treated as **version 0** (pre-versioning
+      era) and is rejected so old unversioned files are not silently misread.
+    - Any version other than :data:`SCHEMA_VERSION` is rejected with a message
+      that tells the operator exactly which file and line caused the problem and
+      what migration step is needed.
+    """
+    stored = rec.get("schema_version", None)
+    if stored is None:
+        raise RepositoryError(
+            f"{path}:{lineno}: record is missing 'schema_version'. "
+            f"Expected {SCHEMA_VERSION}. "
+            "The file may have been written by a pre-versioning build. "
+            "Remove or migrate the file before restarting."
+        )
+    if stored != SCHEMA_VERSION:
+        raise RepositoryError(
+            f"{path}:{lineno}: unsupported schema_version={stored!r} "
+            f"(this build understands version {SCHEMA_VERSION}). "
+            "Migrate the data file or downgrade the application."
+        )
 
 
 def _append_jsonl(path: Path, record: dict) -> None:
@@ -196,7 +223,8 @@ class FileRepository(BaseRepository):
         self._load_scores()
 
     def _load_articles(self) -> None:
-        for rec in _read_jsonl(self._articles_path):
+        for lineno, rec in _read_jsonl(self._articles_path):
+            _validate_schema_version(rec, path=self._articles_path, lineno=lineno)
             try:
                 article = Article.from_dict(rec)
             except (ValueError, KeyError):
@@ -208,7 +236,8 @@ class FileRepository(BaseRepository):
                 self._next_idx += 1
 
     def _load_scores(self) -> None:
-        for rec in _read_jsonl(self._scores_path):
+        for lineno, rec in _read_jsonl(self._scores_path):
+            _validate_schema_version(rec, path=self._scores_path, lineno=lineno)
             try:
                 score = BiasScore.from_dict(rec)
             except (ValueError, KeyError):

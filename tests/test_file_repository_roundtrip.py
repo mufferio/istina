@@ -27,6 +27,7 @@ from istina.model.repositories.file_repository import (
     SCHEMA_VERSION,
     FileRepository,
 )
+from istina.utils.error_handling import RepositoryError
 
 
 # ── fixtures ──────────────────────────────────────────────────────────────────
@@ -247,3 +248,100 @@ class TestCompact:
         tmp_repo.compact()
         lines = tmp_repo._articles_path.read_text(encoding="utf-8").splitlines()
         assert len(lines) == 1
+
+
+# ── schema version validation tests ─────────────────────────────────────────────────────
+
+class TestSchemaVersionValidation:
+    """Loading a file whose schema_version != SCHEMA_VERSION must raise RepositoryError."""
+
+    def _write_raw(self, path: Path, record: dict) -> None:
+        """Write *record* as a single JSONL line, bypassing FileRepository."""
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", encoding="utf-8") as fh:
+            fh.write(json.dumps(record) + "\n")
+
+    # —— articles.jsonl ——
+
+    def test_articles_wrong_version_raises(self, tmp_path: Path, sample_article: Article) -> None:
+        """A record with schema_version=99 must raise RepositoryError on load."""
+        bad_rec = {**sample_article.to_dict(), "schema_version": 99}
+        self._write_raw(tmp_path / ARTICLES_FILE, bad_rec)
+
+        with pytest.raises(RepositoryError, match="schema_version=99"):
+            FileRepository(base_dir=tmp_path)
+
+    def test_articles_missing_version_raises(self, tmp_path: Path, sample_article: Article) -> None:
+        """A record without schema_version must raise RepositoryError on load."""
+        bad_rec = sample_article.to_dict()  # no schema_version key
+        self._write_raw(tmp_path / ARTICLES_FILE, bad_rec)
+
+        with pytest.raises(RepositoryError, match="missing 'schema_version'"):
+            FileRepository(base_dir=tmp_path)
+
+    def test_articles_error_names_file_and_line(self, tmp_path: Path, sample_article: Article) -> None:
+        """The error message must include the file path and line number."""
+        bad_rec = {**sample_article.to_dict(), "schema_version": 2}
+        self._write_raw(tmp_path / ARTICLES_FILE, bad_rec)
+
+        with pytest.raises(RepositoryError) as exc_info:
+            FileRepository(base_dir=tmp_path)
+        msg = str(exc_info.value)
+        assert ARTICLES_FILE in msg
+        assert ":1" in msg  # line 1
+
+    # —— bias_scores.jsonl ——
+
+    def test_scores_wrong_version_raises(
+        self, tmp_path: Path, sample_score: BiasScore
+    ) -> None:
+        """A bias_score record with schema_version=99 must raise RepositoryError."""
+        bad_rec = {**sample_score.to_dict(), "schema_version": 99}
+        self._write_raw(tmp_path / BIAS_SCORES_FILE, bad_rec)
+
+        with pytest.raises(RepositoryError, match="schema_version=99"):
+            FileRepository(base_dir=tmp_path)
+
+    def test_scores_missing_version_raises(
+        self, tmp_path: Path, sample_score: BiasScore
+    ) -> None:
+        bad_rec = sample_score.to_dict()  # no schema_version key
+        self._write_raw(tmp_path / BIAS_SCORES_FILE, bad_rec)
+
+        with pytest.raises(RepositoryError, match="missing 'schema_version'"):
+            FileRepository(base_dir=tmp_path)
+
+    # —— valid version still loads cleanly ——
+
+    def test_correct_version_loads_cleanly(
+        self, tmp_path: Path, sample_article: Article
+    ) -> None:
+        """A record with the current SCHEMA_VERSION must load without error."""
+        good_rec = {**sample_article.to_dict(), "schema_version": SCHEMA_VERSION}
+        self._write_raw(tmp_path / ARTICLES_FILE, good_rec)
+
+        repo = FileRepository(base_dir=tmp_path)  # must not raise
+        assert repo.get_article(sample_article.id) == sample_article
+
+    # —— second-line error names the correct line number ——
+
+    def test_error_reports_correct_line_number(
+        self, tmp_path: Path, sample_article: Article
+    ) -> None:
+        """If the bad record is on line 2, the error message must say :2."""
+        good_rec = {**sample_article.to_dict(), "schema_version": SCHEMA_VERSION}
+        a2 = Article.create(
+            title="Second article",
+            url="https://example.com/2",
+            source="Example",
+        )
+        bad_rec = {**a2.to_dict(), "schema_version": 0}
+        path = tmp_path / ARTICLES_FILE
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", encoding="utf-8") as fh:
+            fh.write(json.dumps(good_rec) + "\n")
+            fh.write(json.dumps(bad_rec) + "\n")
+
+        with pytest.raises(RepositoryError) as exc_info:
+            FileRepository(base_dir=tmp_path)
+        assert ":2" in str(exc_info.value)
