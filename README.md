@@ -1,6 +1,6 @@
 <div align="center">
 
-[![Typing SVG](https://readme-typing-svg.demolab.com?font=Fira+Code&size=22&duration=3000&pause=1000&color=58A6FF&center=true&vCenter=true&random=false&width=600&lines=Building+ISTINA;Conflict+Intelligence+Engine;Truth+Through+Data)](https://github.com/mufferio/istina)
+[![Typing SVG](https://readme-typing-svg.demolab.com?font=Fira+Code&size=22&duration=3000&pause=1000&color=4CBB17&center=true&vCenter=true&random=false&width=600&lines=Building+ISTINA;Conflict+Intelligence+Engine;Truth+Through+Data)](https://github.com/mufferio/istina)
 
 # Istina
 
