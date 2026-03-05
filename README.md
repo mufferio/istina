@@ -24,6 +24,7 @@ Istina is a CLI-first prototype that ingests news articles, analyzes them for bi
 - [Requirements](#-requirements)
 - [Configuration](#-configuration)
 - [CLI Commands](#-cli-commands)
+- [AI Providers](#-ai-providers)
 - [Architecture](#-architecture)
 - [Storage Format](#-storage-format-cli-v0)
 - [Running Tests](#-running-tests)
@@ -200,6 +201,104 @@ python main.py summarize --report full --limit 5    # top 5 in full detail
 |:----------------|:--------------------------------------------------------------|
 | `--debug`       | Print full stack traces instead of friendly error messages    |
 | `-h` / `--help` | Show usage for any command                                    |
+
+---
+
+## 🤖 AI Providers
+
+Istina routes every `analyze` run through a **provider**, selected by the `ISTINA_PROVIDER` environment variable.
+Providers are swappable — the rest of the application never changes when you switch between them.
+
+### Available providers
+
+| Provider | `ISTINA_PROVIDER` value | API key required | Notes |
+|:---------|:------------------------|:-----------------|:------|
+| **Mock** | `mock` | No | Deterministic offline analysis — identical input always produces identical output. Use for development and CI. |
+| **Gemini** | `gemini` | Yes (`ISTINA_GEMINI_API_KEY`) | Calls Google Gemini API for real bias detection and claim checking. |
+
+---
+
+### Mock provider (default)
+
+No configuration required — works immediately after install.
+
+```bash
+# ISTINA_PROVIDER defaults to mock, so this is all you need:
+python main.py ingest --feeds "http://feeds.bbci.co.uk/news/rss.xml"
+python main.py analyze --limit 5
+python main.py summarize
+```
+
+The mock provider uses a deterministic heuristic (keyword matching + SHA-256 of the article ID)
+to produce stable `BiasScore` results — same article always gets the same label and confidence score.
+There are no network calls and no rate limits to worry about.
+
+---
+
+### Gemini provider
+
+**1. Get an API key**
+
+Create a free key at [Google AI Studio](https://aistudio.google.com/app/apikey).
+
+**2. Set the environment variables**
+
+```dotenv
+# .env (project root)
+ISTINA_PROVIDER=gemini
+ISTINA_GEMINI_API_KEY=your_api_key_here
+ISTINA_GEMINI_MODEL=gemini-2.5-flash   # optional — this is the default
+ISTINA_RATE_LIMIT_RPM=60               # optional — requests per minute cap
+```
+
+Or export them inline for a one-off run:
+
+```bash
+# Windows (PowerShell)
+$env:ISTINA_PROVIDER       = "gemini"
+$env:ISTINA_GEMINI_API_KEY = "your_api_key_here"
+
+# macOS / Linux
+export ISTINA_PROVIDER=gemini
+export ISTINA_GEMINI_API_KEY=your_api_key_here
+```
+
+**3. Run the pipeline**
+
+```bash
+python main.py ingest --feeds "http://feeds.bbci.co.uk/news/rss.xml"
+python main.py analyze --limit 10
+python main.py summarize --report full
+```
+
+Each article triggers **two** Gemini API calls — one for rhetorical bias scoring and one for claim extraction. The built-in rate limiter (`ISTINA_RATE_LIMIT_RPM`) prevents exceeding the free-tier quota.
+
+**What Gemini returns (per article):**
+
+| Field | Description |
+|:------|:------------|
+| `overall_bias_label` | `left`, `center`, `right`, or `unknown` |
+| `rhetorical_bias` | List of detected flags, e.g. `loaded_language`, `appeal_to_fear` |
+| `claim_checks` | List of extracted claims with verdicts (`true`, `false`, `mixed`, `unverified`, `insufficient evidence`) |
+| `confidence` | Float in `[0.0, 1.0]` |
+
+---
+
+### Adding a new provider
+
+All providers implement the [`BaseProvider`](src/istina/model/providers/base_provider.py) interface — a single method:
+
+```python
+def analyze_article(self, article: Article) -> BiasScore:
+    ...
+```
+
+To wire in a new provider:
+1. Create `src/istina/model/providers/your_provider.py` implementing `BaseProvider`.
+2. Add a branch in [`src/istina/model/providers/provider_factory.py`](src/istina/model/providers/provider_factory.py).
+3. Add the new name to `valid_providers` in [`src/istina/config/settings.py`](src/istina/config/settings.py).
+
+No changes to services, commands, or the CLI controller are needed.
 
 ---
 
