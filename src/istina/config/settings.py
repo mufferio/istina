@@ -37,7 +37,7 @@ class Settings:
 
     env: str = "dev"
     provider: str = "mock"
-    repo_type: str = "memory"
+    repo_type: str = "file"
     log_level: str = "INFO"
     data_dir: str = "./data"
     rate_limit_rpm: int = 60
@@ -64,7 +64,7 @@ def load_settings() -> Settings:
     return Settings(
         env=os.getenv("ISTINA_ENV", "dev"),
         provider=os.getenv("ISTINA_PROVIDER", "mock"),
-        repo_type=os.getenv("ISTINA_REPO_TYPE", "memory"),
+        repo_type=os.getenv("ISTINA_REPO_TYPE", "file"),
         log_level=os.getenv("ISTINA_LOG_LEVEL", "INFO"),
         data_dir=os.getenv("ISTINA_DATA_DIR", "./data"),
         rate_limit_rpm=int(os.getenv("ISTINA_RATE_LIMIT_RPM", "60")),

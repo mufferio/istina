@@ -11,7 +11,7 @@ def test_stage1_settings_defaults():
     s = Settings()
     assert s.env == "dev"
     assert s.provider == "mock"
-    assert s.repo_type == "memory"
+    assert s.repo_type == "file"
     assert s.log_level == "INFO"
 
 
@@ -47,7 +47,7 @@ def test_stage1_load_settings_reads_dotenv_and_env(monkeypatch, tmp_path: Path):
 
     s = load_settings()
     assert s.provider == "mock"
-    assert s.repo_type == "memory"
+    assert s.repo_type == "file"
     assert s.log_level == "INFO"
     assert s.rate_limit_rpm == 60
 

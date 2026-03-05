@@ -72,19 +72,7 @@ python main.py analyze --limit 5
 python main.py summarize
 ```
 
-### Persist data across runs
-
-By default Istina keeps everything in memory. To write to disk, set `ISTINA_REPO_TYPE=file` before running:
-
-```bash
-# Windows (PowerShell)
-$env:ISTINA_REPO_TYPE = "file"
-
-# macOS / Linux
-export ISTINA_REPO_TYPE=file
-```
-
-Or create a `.env` file in the project root — see [Configuration](#-configuration).
+> Articles are stored in `data/articles.jsonl` by default. To use in-memory storage only (no disk writes), set `ISTINA_REPO_TYPE=memory`.
 
 ---
 
@@ -110,7 +98,7 @@ All settings are controlled by **environment variables** or a `.env` file placed
 
 | Variable                | Default            | Description                                                        |
 |:------------------------|:-------------------|:-------------------------------------------------------------------|
-| `ISTINA_REPO_TYPE`      | `memory`           | `file` — persist to disk; `memory` — in-process only              |
+| `ISTINA_REPO_TYPE`      | `file`             | `file` — persist to disk; `memory` — in-process only              |
 | `ISTINA_DATA_DIR`       | `./data`           | Directory for JSONL files (only when `ISTINA_REPO_TYPE=file`)      |
 | `ISTINA_PROVIDER`       | `mock`             | AI provider: `mock`, `gemini`                                      |
 | `ISTINA_ENV`            | `dev`              | Runtime environment: `dev`, `test`, `prod`                         |
